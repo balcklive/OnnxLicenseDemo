@@ -9,7 +9,9 @@ OnnxLicenseDemo/
 ├── ClientApp/          # 最终交付客户的程序（演示核心逻辑）
 ├── nginx/              # 反向代理 + HTTPS 配置示例
 ├── docker-compose.yml  # 一键编排 LicenseServer + PostgreSQL + Nginx
-└── DEPLOY.md           # 完整的云服务器部署步骤，从这里开始看
+├── DEPLOY.md           # 完整的云服务器部署步骤（证书、compose、后台登录）
+├── USAGE.md            # 用法手册：启动/自检/发码席位撤销/机器规格/故障对照表
+└── README.md           # 本文件：结构、容器格式、命令速查、安全边界
 ```
 
 ## 整体架构
@@ -17,7 +19,7 @@ OnnxLicenseDemo/
 ```
   客户电脑上的 ClientApp
         │  1. 首次运行：输入激活码 -> POST /api/activate
-        │  2. 之后每次启动：POST /api/heartbeat 换新令牌
+        │  2. 之后定期心跳：POST /api/heartbeat 换新令牌（bot-cs 客户端是每 10 分钟）
         ▼
   你的云服务器: LicenseServer (Docker容器)
         │  - 验证激活码是否有效/是否吊销/是否过期
@@ -33,11 +35,13 @@ OnnxLicenseDemo/
 
 ## 从这里开始
 
-1. 先看 **`DEPLOY.md`** —— 里面是从零开始部署到云服务器的完整步骤（申请证书、启动服务、登录后台、生成激活码、打包给客户）。
-2. `ModelProtector` 现在写 **BSMO 容器**（2026-09-24 起）：交付包走「原地加密整个目录」，文件名不变，
+1. **服务已经在跑了、只是要用/要排障** → 看 **`USAGE.md`**：启动形态与自检、发码/席位/撤销的真实语义、
+   机器规格建议、备份清单、故障对照表（含几条只有读代码才能发现的坑）。
+2. **从零部署到云服务器** → 看 **`DEPLOY.md`**（申请证书、`.env`、compose 起服务、登录后台、打包给客户）。
+3. `ModelProtector` 现在写 **BSMO 容器**（2026-09-24 起）：交付包走「原地加密整个目录」，文件名不变，
    客户端按文件头区分密文/明文。`ClientApp` 仍兼容旧版 28 字节裸头的 `.onnx.enc`，新交付包别再那么发。
    命令与格式见下面「ModelProtector 命令（BSMO v1 容器）」，接 bot-cs 见「接入 bot-cs」。
-3. 许可证不再由本地CLI工具签发，改成登录 Web 后台点几下按钮生成。
+4. 许可证不再由本地 CLI 工具签发，改成登录 Web 后台点几下按钮生成。
 
 ## ModelProtector 命令（BSMO v1 容器）
 
