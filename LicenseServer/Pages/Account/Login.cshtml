@@ -1,0 +1,15 @@
+@page
+@model LicenseServer.Pages.Account.LoginModel
+
+<div class="card" style="max-width:360px;margin:80px auto;">
+    <h2>管理员登录</h2>
+    @if (!string.IsNullOrEmpty(Model.Error))
+    {
+        <p style="color:#b91c1c;">@Model.Error</p>
+    }
+    <form method="post">
+        <label>密码</label>
+        <input type="password" name="Password" style="width:100%;box-sizing:border-box;margin-bottom:12px;" />
+        <button class="btn-primary" type="submit" style="width:100%;padding:8px;">登录</button>
+    </form>
+</div>

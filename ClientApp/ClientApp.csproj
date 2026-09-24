@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- Windows-only: 用到了 WMI (System.Management) 和 DPAPI (ProtectedData) -->
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RollForward>LatestMajor</RollForward>
+    <RootNamespace>ClientApp</RootNamespace>
+    <AssemblyName>ClientApp</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 官方、成熟、开源: https://github.com/microsoft/onnxruntime -->
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.19.2" />
+    <!-- 用于读取 CPU/主板序列号生成机器指纹 -->
+    <PackageReference Include="System.Management" Version="8.0.0" />
+    <!-- 用于 Windows DPAPI，本机加密缓存激活令牌，支持离线宽限期 -->
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+    <!-- 用于本地校验服务器签发的JWT令牌（离线时用），与LicenseServer用的是同一个官方包 -->
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.0.1" />
+  </ItemGroup>
+
+</Project>

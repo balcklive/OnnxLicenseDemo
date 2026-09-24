@@ -1,0 +1,105 @@
+@page
+@model LicenseServer.Pages.Admin.IndexModel
+
+<h2>创建新许可证</h2>
+<div class="card">
+    <form method="post" asp-page-handler="Create">
+        <label>产品名称</label>
+        <input type="text" name="ProductName" required style="width:100%;box-sizing:border-box;margin-bottom:10px;" />
+
+        <label>有效天数</label>
+        <input type="number" name="ValidDays" value="365" required style="width:100%;box-sizing:border-box;margin-bottom:10px;" />
+
+        <label>最多可激活设备数</label>
+        <input type="number" name="MaxActivations" value="1" required style="width:100%;box-sizing:border-box;margin-bottom:10px;" />
+
+        <label>模型密钥（Base64，留空则自动生成新的；同一个onnx模型对应的所有客户建议填同一个值，这样模型只需加密一次）</label>
+        <input type="text" name="ModelKeyBase64" style="width:100%;box-sizing:border-box;margin-bottom:10px;" />
+
+        <button class="btn-primary" type="submit">生成激活码</button>
+    </form>
+
+    @if (!string.IsNullOrEmpty(Model.JustCreatedCode))
+    {
+        <p style="margin-top:12px;">
+            已生成激活码：<strong style="font-size:16px;">@Model.JustCreatedCode</strong>
+            （请复制发给客户，此码不会再单独展示）
+        </p>
+    }
+</div>
+
+<h2>许可证列表</h2>
+@foreach (var license in Model.Licenses)
+{
+    <table>
+        <tr>
+            <th>激活码</th>
+            <td colspan="3">
+                @license.Code
+                @if (license.IsRevoked)
+                {
+                    <span class="badge badge-bad">已吊销</span>
+                }
+                else if (DateTime.UtcNow > license.ExpiryUtc)
+                {
+                    <span class="badge badge-bad">已过期</span>
+                }
+                else
+                {
+                    <span class="badge badge-ok">正常</span>
+                }
+            </td>
+        </tr>
+        <tr>
+            <th>产品</th><td>@license.ProductName</td>
+            <th>到期时间</th><td>@license.ExpiryUtc.ToString("yyyy-MM-dd") (UTC)</td>
+        </tr>
+        <tr>
+            <th>激活上限</th><td>@license.MaxActivations 台</td>
+            <th>操作</th>
+            <td>
+                @if (!license.IsRevoked)
+                {
+                    <form method="post" asp-page-handler="RevokeLicense" class="inline">
+                        <input type="hidden" name="id" value="@license.Id" />
+                        <button class="btn-danger" type="submit" onclick="return confirm('确定吊销整张许可证？所有设备都会立即失效。')">吊销整张许可证</button>
+                    </form>
+                }
+            </td>
+        </tr>
+        <tr>
+            <th colspan="4">已激活设备（@license.Activations.Count(a => !a.IsRevoked) / @license.MaxActivations）</th>
+        </tr>
+        @if (license.Activations.Count == 0)
+        {
+            <tr><td colspan="4" style="color:#999;">尚无设备激活</td></tr>
+        }
+        else
+        {
+            <tr>
+                <th>机器指纹</th><th>激活时间</th><th>最后心跳时间</th><th>操作</th>
+            </tr>
+            foreach (var act in license.Activations)
+            {
+                <tr>
+                    <td>
+                        @act.MachineId.Substring(0, Math.Min(16, act.MachineId.Length))...
+                        @(string.IsNullOrEmpty(act.MachineName) ? "" : $"（{act.MachineName}）")
+                        @if (act.IsRevoked) { <span class="badge badge-bad">已撤销</span> }
+                    </td>
+                    <td>@act.ActivatedUtc.ToString("yyyy-MM-dd HH:mm") UTC</td>
+                    <td>@act.LastHeartbeatUtc.ToString("yyyy-MM-dd HH:mm") UTC</td>
+                    <td>
+                        @if (!act.IsRevoked)
+                        {
+                            <form method="post" asp-page-handler="RevokeActivation" class="inline">
+                                <input type="hidden" name="id" value="@act.Id" />
+                                <button class="btn-danger" type="submit" onclick="return confirm('撤销这台设备的激活？该设备会立即失效，释放出的名额可用于激活新设备。')">撤销此设备</button>
+                            </form>
+                        }
+                    </td>
+                </tr>
+            }
+        }
+    </table>
+}

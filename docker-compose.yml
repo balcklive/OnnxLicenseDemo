@@ -1,0 +1,46 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: licenses
+      POSTGRES_USER: license_app
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?请在 .env 里设置 DB_PASSWORD}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks: [internal]
+
+  licenseserver:
+    build: ./LicenseServer
+    restart: unless-stopped
+    depends_on: [db]
+    environment:
+      ConnectionStrings__Default: "Host=db;Database=licenses;Username=license_app;Password=${DB_PASSWORD:?}"
+      ADMIN_PASSWORD_SHA256: ${ADMIN_PASSWORD_SHA256:?请在 .env 里设置 ADMIN_PASSWORD_SHA256}
+      KEYS_DIR: /app/keys
+    volumes:
+      - jwt_keys:/app/keys   # 一定要持久化！容器重启丢了密钥，所有已发出的客户端令牌全部失效
+    networks: [internal]
+    # 不直接对外暴露端口，走下面的 nginx 反向代理 + HTTPS
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    depends_on: [licenseserver]
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/license.conf:/etc/nginx/conf.d/default.conf:ro
+      - certbot_www:/var/www/certbot:ro
+      - certbot_certs:/etc/letsencrypt:ro
+    networks: [internal]
+
+volumes:
+  db_data:
+  jwt_keys:
+  certbot_www:
+  certbot_certs:
+
+networks:
+  internal:
