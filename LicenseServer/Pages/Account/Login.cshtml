@@ -1,15 +1,30 @@
 @page
 @model LicenseServer.Pages.Account.LoginModel
 
-<div class="card" style="max-width:360px;margin:80px auto;">
-    <h2>管理员登录</h2>
-    @if (!string.IsNullOrEmpty(Model.Error))
-    {
-        <p style="color:#b91c1c;">@Model.Error</p>
-    }
-    <form method="post">
-        <label>密码</label>
-        <input type="password" name="Password" style="width:100%;box-sizing:border-box;margin-bottom:12px;" />
-        <button class="btn-primary" type="submit" style="width:100%;padding:8px;">登录</button>
-    </form>
+<div class="login-shell">
+    <div class="login">
+        <h1>许可控制台</h1>
+        <p class="login__sub">输入管理员密码以继续</p>
+
+        @if (!string.IsNullOrEmpty(Model.Error))
+        {
+            @* 错误必须说清"出了什么问题"和"接下来怎么办"，
+               而不是笼统地红一下。Model.Error 里的文案本身就是可执行的。 *@
+            <div class="login__error" role="alert">
+                <svg class="icon" aria-hidden="true"><use href="#i-alert" /></svg>
+                <span>@Model.Error</span>
+            </div>
+        }
+
+        <form method="post">
+            <div class="field">
+                <label for="pw">密码</label>
+                @* autofocus：这个页面只有一个输入框，不该让用户还得先点一下。
+                   autocomplete：让密码管理器能正确识别这是一个登录密码框。 *@
+                <input id="pw" type="password" name="Password" required autofocus
+                       autocomplete="current-password" />
+            </div>
+            <button class="btn btn--primary" type="submit">登录</button>
+        </form>
+    </div>
 </div>

@@ -1,40 +1,48 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="zh-CN">
 <head>
     <meta charset="utf-8" />
-    <title>许可证管理后台</title>
-    <style>
-        body { font-family: -apple-system, "Microsoft YaHei", sans-serif; margin: 0; background: #f6f7f9; color: #222; }
-        header { background: #1f2937; color: #fff; padding: 14px 24px; display: flex; justify-content: space-between; align-items: center; }
-        header a { color: #fff; text-decoration: none; }
-        main { max-width: 1000px; margin: 24px auto; padding: 0 16px; }
-        table { width: 100%; border-collapse: collapse; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.08); margin-bottom: 24px; }
-        th, td { padding: 8px 12px; border-bottom: 1px solid #eee; text-align: left; font-size: 14px; }
-        th { background: #f0f1f3; }
-        .badge { padding: 2px 8px; border-radius: 4px; font-size: 12px; }
-        .badge-ok { background: #dcfce7; color: #166534; }
-        .badge-bad { background: #fee2e2; color: #991b1b; }
-        form.inline { display: inline; }
-        button, input[type=submit] { cursor: pointer; border: none; border-radius: 4px; padding: 5px 10px; font-size: 13px; }
-        .btn-danger { background: #ef4444; color: #fff; }
-        .btn-primary { background: #2563eb; color: #fff; }
-        .card { background: #fff; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); margin-bottom: 24px; }
-        input[type=text], input[type=number], input[type=password] { padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; margin-right: 8px; }
-        label { font-size: 13px; color: #555; display: block; margin-bottom: 4px; }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    @* 声明本页原生就是深色的：浏览器据此渲染滚动条、表单控件、自动填充背景这些
+       我们没画的部件。少了它，那些部件会按浅色渲染，和界面格格不入。 *@
+    <meta name="color-scheme" content="dark" />
+    <title>许可控制台</title>
+    <link rel="stylesheet" href="~/css/console.css" />
 </head>
 <body>
-    <header>
-        <strong>许可证管理后台</strong>
-        <span>
-            @if (User.Identity?.IsAuthenticated == true)
-            {
-                <form method="post" action="/Account/Logout" class="inline"><button class="btn-danger" type="submit">退出登录</button></form>
-            }
-        </span>
-    </header>
-    <main>
+    @await Html.PartialAsync("_Icons")
+
+    @if (User.Identity?.IsAuthenticated == true)
+    {
+        <header class="topbar">
+            <span class="topbar__brand">
+                <svg class="icon icon--lg" aria-hidden="true"><use href="#i-shield" /></svg>
+                许可控制台
+            </span>
+            <span class="topbar__spacer"></span>
+            @* 大屏没有实时刷新（那需要轮询或 SignalR），给一个明确的手动入口，
+               比让数字悄悄过期要诚实。 *@
+            <a class="btn btn--ghost btn--sm" href="@(Context.Request.Path + Context.Request.QueryString)">
+                <svg class="icon" aria-hidden="true"><use href="#i-refresh" /></svg>
+                刷新
+            </a>
+            <form method="post" asp-page="/Account/Logout">
+                <button class="btn btn--ghost btn--sm" type="submit">
+                    <svg class="icon" aria-hidden="true"><use href="#i-logout" /></svg>
+                    退出
+                </button>
+            </form>
+        </header>
+        <main class="main">
+            @RenderBody()
+        </main>
+    }
+    else
+    {
+        @* 登录页自己负责整屏居中，不套已登录状态的外壳 *@
         @RenderBody()
-    </main>
+    }
+
+    <script src="~/js/console.js" defer></script>
 </body>
 </html>

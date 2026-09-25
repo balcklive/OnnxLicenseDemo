@@ -1,0 +1,566 @@
+/* ============================================================================
+   许可控制台 — 深色运维界面
+   ----------------------------------------------------------------------------
+   单一主题（深色）。不是按"后台就该是浅色"的惯例选的，是按使用场景选的：
+   运维长时间盯着一台别人家软件正在依赖的授权服务器，房间光线偏暗，
+   24/7 的监控台不该是一块发光的白板。
+
+   色彩策略：Restrained —— 中性色 + 单一强调色，强调色只用于主操作与状态指示。
+   所有文字色的对比度都由脚本算过（见仓库外 /tmp/contrast.mjs），不靠肉眼；
+   四个状态色对 --surface-1 全部 ≥3:1。
+   ========================================================================== */
+
+:root {
+  /* —— 表面：三层足够，不要更多 —— */
+  --plane:         #0b0f14;  /* 页面底 */
+  --surface-1:     #161b22;  /* 卡片 / 表格 */
+  --surface-2:     #1c232c;  /* 输入框 / 悬浮 / 表头 */
+
+  --border:        #262d38;
+  --border-strong: #333c4a;
+
+  /* —— 文字 —— */
+  --ink:   #e6edf3;
+  --ink-2: #9aa7b4;
+  --ink-3: #8590a0;   /* 对比度脚本逼出来的值：#7d8896 在 --surface-2 上只有 4.40，不达标 */
+
+  /* —— 强调色：填充与文字分开两个值 ——
+     同一个 #3987e5 当填充够用（图形对象门槛 3:1），当文字在 --surface-2 上只有 4.35，
+     不到正文 4.5 的门槛，所以文字另用一个亮一档的步进。 */
+  --accent:     #3987e5;
+  --accent-ink: #4a92ea;
+  --accent-hot: #6fb0f5;
+
+  /* 实心填充（主按钮、被选中的预设）刻意比 --accent 深一档。
+     白字压在 #3987e5 上只有 3.64:1，不到正文 4.5 的门槛 —— 这是脚本算出来的，不是眼估。
+     #3168c4 白字 5.37:1，同时自身对卡片表面 3.22:1，作为图形仍可辨识。 */
+  --accent-solid:     #3168c4;
+  --accent-solid-hot: #3a74d0;
+
+  /* —— 状态色 ——
+     刻意只有三个语义色 + 中性。调色板验证器测出 warning #fab219 与 serious #ec835a
+     的法向视觉 ΔE 仅 13.6（低于 15 底线），两色肉眼难分，因此不引入第四个暖色。
+     "已吊销"是管理员的主动操作、不是故障，走中性色。 */
+  --ok:       #0ca30c;   --ok-ink:   #5fd35f;
+  --warn:     #fab219;   --warn-ink: #fab219;
+  --critical: #d03b3b;   --crit-ink: #f08a8a;
+
+  /* —— 尺寸 —— */
+  --r-card:  14px;   /* 卡片 12–16px */
+  --r-ctl:   8px;
+  --r-pill:  999px;  /* 药丸只给小控件：徽章、按钮 */
+
+  --gap-1: 4px;  --gap-2: 8px;  --gap-3: 12px;
+  --gap-4: 16px; --gap-5: 24px; --gap-6: 32px;
+
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+          "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  /* 等宽在这里是功能性的，不是"技术感"装饰：
+     16 位分组激活码需要等宽字形才能肉眼逐位校验。 */
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", "Cascadia Mono",
+               Consolas, "Liberation Mono", monospace;
+
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);  /* 指数缓出 */
+  --dur:  180ms;
+
+  color-scheme: dark;  /* 让滚动条、表单控件等浏览器原生部件也用深色 */
+}
+
+/* ============================ 基础 ============================ */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--plane);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 0.875rem;   /* 14px —— Operate 界面的密集基准 */
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 { margin: 0; font-weight: 600; line-height: 1.25; }
+
+a {
+  color: var(--accent-ink);
+  text-decoration-color: color-mix(in srgb, var(--accent-ink) 40%, transparent);
+  text-underline-offset: 3px;
+  transition: color var(--dur) var(--ease), text-decoration-color var(--dur) var(--ease);
+}
+a:hover { color: var(--accent-hot); text-decoration-color: currentColor; }
+
+/* 仅供屏幕阅读器。复制按钮、图标按钮的可访问名称靠它，不靠 title 属性。 */
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+
+/* ==================== 浏览器原生表面 ====================
+   craft-floor 点名的"最容易被漏掉的一环"：这些部件不是我们画的，
+   但它们带着各自的默认样式，不接管就会和整个界面格格不入。 */
+
+::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); color: var(--ink); }
+
+body { caret-color: var(--accent-hot); }
+
+* { scrollbar-color: var(--border-strong) transparent; scrollbar-width: thin; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border: 3px solid var(--plane);
+  border-radius: var(--r-pill);
+}
+::-webkit-scrollbar-thumb:hover { background: #445064; }
+
+:focus-visible {
+  outline: 2px solid var(--accent-hot);
+  outline-offset: 2px;
+  border-radius: var(--r-ctl);
+}
+
+/* 表格里的数字必须等宽对齐，否则列看起来是歪的。
+   只用在"成列的数字"上——大号独立数字用比例字形更好看，见 .metric__value。 */
+table { font-variant-numeric: tabular-nums; }
+
+/* ============================ 外壳 ============================ */
+
+.topbar {
+  position: sticky; top: 0; z-index: 10;
+  display: flex; align-items: center; gap: var(--gap-4);
+  padding: var(--gap-3) var(--gap-5);
+  background: color-mix(in srgb, var(--plane) 88%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+}
+.topbar__brand { display: flex; align-items: center; gap: var(--gap-2); font-weight: 600; color: var(--ink); }
+.topbar__brand svg { color: var(--accent-ink); }
+.topbar__spacer { flex: 1; }
+.topbar__meta { color: var(--ink-3); font-size: 0.8125rem; }
+
+.main { max-width: 1180px; margin: 0 auto; padding: var(--gap-5) var(--gap-4) var(--gap-6); }
+
+.page-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--gap-4); margin-bottom: var(--gap-4); }
+.page-head h1 { font-size: 1.375rem; letter-spacing: -0.01em; }
+
+/* ============================ 图标 ============================ */
+
+/* 统一 24x24 画布、2px 描边、圆头圆角——一套图标必须同源同重，
+   这也是不能用 Unicode 字符顶替的原因：字符的字重由字体决定，无法统一。 */
+.icon { width: 1em; height: 1em; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.icon--lg { width: 1.25em; height: 1.25em; }
+
+/* ============================ 按钮 ============================ */
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--gap-2);
+  padding: 7px 14px;
+  font: inherit; font-size: 0.8125rem; font-weight: 500;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-ctl);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease),
+              color var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+.btn:hover { background: #232b36; border-color: #445064; }
+.btn:active { transform: translateY(1px); }
+.btn:disabled, .btn[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+.btn--primary { background: var(--accent-solid); border-color: var(--accent-solid); color: #fff; }
+.btn--primary:hover { background: var(--accent-solid-hot); border-color: var(--accent-solid-hot); }
+
+/* 预设快捷键：一排小药丸，点一下把值填进输入框。
+   用 <button aria-pressed> 而不是 radio，是为了不把"预设"混进表单数据 ——
+   提交上去的还是那一个 ValidDays，服务端不必知道有没有人用过预设。 */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: var(--gap-2); }
+.chip {
+  padding: 3px 10px;
+  font: inherit; font-size: 0.75rem;
+  color: var(--ink-2);
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-pill);
+  cursor: pointer;
+  transition: color var(--dur) var(--ease), background var(--dur) var(--ease),
+              border-color var(--dur) var(--ease);
+}
+.chip:hover { color: var(--ink); border-color: #445064; }
+.chip[aria-pressed="true"] {
+  color: #fff;
+  background: var(--accent-solid);
+  border-color: var(--accent-solid);
+}
+
+.btn--danger { background: transparent; border-color: color-mix(in srgb, var(--critical) 55%, var(--border)); color: var(--crit-ink); }
+.btn--danger:hover { background: color-mix(in srgb, var(--critical) 16%, transparent); border-color: var(--critical); }
+
+.btn--ghost { background: transparent; border-color: transparent; color: var(--ink-2); }
+.btn--ghost:hover { background: var(--surface-2); color: var(--ink); }
+
+.btn--sm { padding: 3px 9px; font-size: 0.75rem; }
+
+/* 复制按钮：常驻但低调，悬停才亮。复制成功时短暂变色作为唯一的即时反馈。 */
+.copy {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; padding: 0;
+  color: var(--ink-3);
+  background: transparent; border: 1px solid transparent;
+  border-radius: var(--r-ctl); cursor: pointer;
+  transition: color var(--dur) var(--ease), background var(--dur) var(--ease),
+              border-color var(--dur) var(--ease);
+}
+.copy:hover { color: var(--ink); background: var(--surface-2); border-color: var(--border-strong); }
+.copy[data-copied="1"] { color: var(--ok-ink); border-color: color-mix(in srgb, var(--ok) 50%, transparent); }
+
+/* ============================ 仪表盘 ============================ */
+
+/* 刻意**不是**一排等大的 KPI 卡片。等大卡片是"懒惰的容器"：
+   它让四个含义完全不同的数字看起来权重相同，也浪费掉本该用于分组的留白。
+   这里是一个有内部结构的仪表盘面板，靠分隔线切分，密度更高。 */
+.panel {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  margin-bottom: var(--gap-5);
+  overflow: hidden;
+}
+.panel__head {
+  display: flex; align-items: center; gap: var(--gap-3);
+  padding: var(--gap-3) var(--gap-4);
+  border-bottom: 1px solid var(--border);
+}
+.panel__title { font-size: 0.8125rem; font-weight: 600; color: var(--ink-2); letter-spacing: 0.02em; }
+.panel__note { margin-left: auto; font-size: 0.75rem; color: var(--ink-3); }
+
+/* 首行：核心计数。左大右小，不是四等分。 */
+.metrics {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr 1fr 1fr;
+  border-bottom: 1px solid var(--border);
+}
+.metric {
+  padding: var(--gap-4) var(--gap-4);
+  border-right: 1px solid var(--border);
+  min-width: 0;
+}
+.metric:last-child { border-right: 0; }
+.metric__label { font-size: 0.75rem; color: var(--ink-3); margin-bottom: var(--gap-1); }
+/* 大号独立数字用比例字形（默认），tabular-nums 会让每个数字都占 "0" 的宽度，
+   在大字号下显得松散。tabular-nums 只留给成列的数据。见上面 table 的规则。 */
+.metric__value { font-size: 1.75rem; font-weight: 600; letter-spacing: -0.02em; line-height: 1.15; color: var(--ink); }
+.metric__value--lead { font-size: 2.5rem; }
+.metric__sub { font-size: 0.75rem; color: var(--ink-3); margin-top: var(--gap-1); }
+.metric__sub b { color: var(--ink-2); font-weight: 600; }
+
+/* 次行：三组分类指标。 */
+.metrics--sub { grid-template-columns: 1fr 1fr 1fr; }
+.metrics--sub .metric { padding: var(--gap-3) var(--gap-4); }
+.metric__row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--gap-2); padding: 2px 0; }
+.metric__row span { color: var(--ink-3); font-size: 0.8125rem; }
+.metric__row b { font-size: 0.9375rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.metric__row b.is-warn { color: var(--warn-ink); }
+.metric__row b.is-critical { color: var(--crit-ink); }
+.metric__row b.is-zero { color: var(--ink-3); font-weight: 500; }
+
+/* ============================ 席位 meter ============================ */
+
+/* 比例对上限 → meter，不是饼图（dataviz：两片的饼图永远不如一个 meter）。
+   填充承载严重程度；底槽是同色系更暗的一档，这样"还剩多少"也能读出来。 */
+.seats { padding: var(--gap-4); border-top: 1px solid var(--border); }
+.seats__head { display: flex; align-items: baseline; gap: var(--gap-2); margin-bottom: var(--gap-2); }
+.seats__label { font-size: 0.75rem; color: var(--ink-3); }
+.seats__value { font-size: 0.9375rem; font-weight: 600; font-variant-numeric: tabular-nums; margin-left: auto; }
+.meter {
+  height: 8px; border-radius: var(--r-pill); overflow: hidden;
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface-2));
+}
+/* 这里刻意**不加** transition：宽度只在页面加载时确定，页面上没有任何东西会动态改它，
+   给一个不表达状态变化的动效只是装饰（而且动画 width 会触发布局抖动）。 */
+.meter__fill {
+  height: 100%; border-radius: var(--r-pill);
+  background: var(--accent);
+}
+.meter__fill.is-warn { background: var(--warn); }
+.meter__fill.is-critical { background: var(--critical); }
+
+/* ============================ 筛选栏 ============================ */
+
+/* dataviz：筛选控件排成一行，放在它所作用的内容之上。 */
+.filters {
+  display: flex; align-items: center; gap: var(--gap-3);
+  padding: var(--gap-3) var(--gap-4);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card) var(--r-card) 0 0;
+  border-bottom: 0;
+}
+.filters__search { position: relative; flex: 1; max-width: 320px; display: flex; align-items: center; }
+.filters__search .icon { position: absolute; left: 10px; color: var(--ink-3); width: 15px; height: 15px; pointer-events: none; }
+.filters__search input { width: 100%; padding-left: 32px; }
+.filters__spacer { flex: 1; }
+.filters__count { font-size: 0.8125rem; color: var(--ink-3); }
+
+input[type="text"], input[type="number"], input[type="password"], input[type="search"], select {
+  font: inherit; font-size: 0.8125rem;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-ctl);
+  padding: 7px 10px;
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+input::placeholder { color: var(--ink-3); }
+input:hover, select:hover { border-color: #445064; }
+input:focus, select:focus { border-color: var(--accent); outline: none; }
+input:focus-visible, select:focus-visible { outline: 2px solid var(--accent-hot); outline-offset: 1px; }
+select { cursor: pointer; }
+
+/* ============================ 表格 ============================ */
+
+/* 唯一一张表。旧实现是"每张证一个 table 垂直堆叠"，没有共同的列，
+   于是永远无法回答"哪张证快到期""谁的席位满了"——没有可对齐的基准。 */
+.table-wrap {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 0 0 var(--r-card) var(--r-card);
+  overflow-x: auto;  /* 安全网：窄屏时不至于整体崩坏。这不是响应式设计。 */
+}
+table.list { width: 100%; min-width: 900px; border-collapse: collapse; }
+
+table.list thead th {
+  position: sticky; top: 0;
+  padding: var(--gap-2) var(--gap-3);
+  font-size: 0.75rem; font-weight: 600; color: var(--ink-3);
+  text-align: left; white-space: nowrap;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+table.list th a { color: inherit; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
+table.list th a:hover { color: var(--ink); }
+table.list th a .icon { width: 12px; height: 12px; opacity: 0.5; }
+table.list th.is-sorted a { color: var(--ink); }
+table.list th.is-sorted a .icon { opacity: 1; color: var(--accent-ink); }
+
+table.list tbody td {
+  padding: var(--gap-3);
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+table.list tbody tr:last-child td { border-bottom: 0; }
+
+/* 主行悬停高亮，让"这一行"在密集表里不丢 */
+table.list tbody tr.row:hover > td { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+table.list tbody tr.row[data-state="revoked"] { opacity: 0.62; }
+
+.code {
+  font-family: var(--font-mono); font-size: 0.8125rem; letter-spacing: 0.01em;
+  color: var(--ink); white-space: nowrap;
+}
+.code--sm { font-size: 0.75rem; color: var(--ink-2); }
+.code-cell { display: flex; align-items: center; gap: var(--gap-1); }
+
+.muted { color: var(--ink-3); }
+.nowrap { white-space: nowrap; }
+.text-xs { font-size: 0.75rem; }
+
+/* ============================ 徽章 ============================ */
+
+/* 状态永远是"图标 + 文字"，颜色只是第三重强化。
+   绝不能只靠颜色——色盲用户与打印场景下颜色会失效。 */
+.badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 9px 2px 7px;
+  border-radius: var(--r-pill);
+  font-size: 0.75rem; font-weight: 500; white-space: nowrap;
+  border: 1px solid transparent;
+}
+.badge .icon { width: 12px; height: 12px; }
+.badge--ok       { color: var(--ok-ink);   background: color-mix(in srgb, var(--ok) 12%, transparent);       border-color: color-mix(in srgb, var(--ok) 35%, transparent); }
+.badge--warn     { color: var(--warn-ink); background: color-mix(in srgb, var(--warn) 12%, transparent);     border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+.badge--critical { color: var(--crit-ink); background: color-mix(in srgb, var(--critical) 14%, transparent); border-color: color-mix(in srgb, var(--critical) 38%, transparent); }
+.badge--neutral  { color: var(--ink-3);    background: color-mix(in srgb, var(--ink-3) 12%, transparent);   border-color: var(--border-strong); }
+/* 删除线表达"已作废"是对的，但应该划在**激活码**上，而不是划在"已吊销"这三个字上——
+   划状态词只会让标签变难读，而真正被作废的是那串码。 */
+.row[data-state="revoked"] .code { text-decoration: line-through; }
+
+.seat { display: flex; align-items: center; gap: var(--gap-2); white-space: nowrap; }
+.seat__num { font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.seat__num b { color: var(--ink); font-weight: 600; }
+.seat__num.is-full b { color: var(--crit-ink); }
+.seat__bar { width: 44px; height: 4px; border-radius: var(--r-pill); background: color-mix(in srgb, var(--ink-3) 30%, transparent); overflow: hidden; }
+.seat__bar i { display: block; height: 100%; background: var(--accent); }
+.seat__bar.is-full i { background: var(--critical); }
+/* 已吊销的证，席位占用只是历史残留、不再代表可售容量，所以不配用强调色 */
+.row[data-state="revoked"] .seat__bar i { background: var(--ink-3); }
+
+/* ============================ 展开设备 ============================ */
+
+/* 原生 <details>：零 JavaScript 实现展开，键盘可达、可被浏览器内查找命中。 */
+details.devices > summary {
+  display: inline-flex; align-items: center; gap: 5px;
+  cursor: pointer; list-style: none;
+  font-size: 0.75rem; color: var(--ink-3);
+  padding: 2px 4px; border-radius: var(--r-ctl);
+  transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+details.devices > summary::-webkit-details-marker { display: none; }
+details.devices > summary:hover { color: var(--ink-2); background: var(--surface-2); }
+details.devices > summary .icon { width: 12px; height: 12px; transition: transform var(--dur) var(--ease); }
+details.devices[open] > summary .icon { transform: rotate(90deg); }
+
+/* 展开后的设备子表独占一行。
+   HTML 不允许 <details> 包住 <tr>，所以只能在主行的单元格里放 <summary>，
+   把子表放在紧随其后的一行，再用 :has() 把两者关联起来。 */
+.subrow { display: none; }
+/* 内嵌底色：让展开出来的一块明显属于上面那一行，而不是飘在表格里 */
+.subrow > td {
+  padding: 0 var(--gap-3) var(--gap-3);
+  background: color-mix(in srgb, var(--plane) 55%, var(--surface-1));
+}
+tr.row:has(details.devices[open]) + .subrow { display: table-row; }
+
+/* 万一浏览器不支持 :has()，展开会失效。那种情况下宁可把所有子表全部摊开，
+   也绝不把数据藏起来 —— 退化应该是"不那么好看"，而不是"看不见"。 */
+@supports not (selector(:has(*))) {
+  .subrow { display: table-row; }
+  details.devices > summary { display: none; }
+}
+
+.subtable { width: 100%; border-collapse: collapse; margin-top: var(--gap-3); }
+.subtable th {
+  padding: var(--gap-1) var(--gap-2);
+  font-size: 0.6875rem; font-weight: 600; color: var(--ink-3); text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.subtable td { padding: 6px var(--gap-2); font-size: 0.8125rem; border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent); }
+.subtable tr:last-child td { border-bottom: 0; }
+.subtable tr[data-revoked="1"] { opacity: 0.5; }
+.subtable tr[data-revoked="1"] .code { text-decoration: line-through; }
+.subtable tr.is-stale .hb { color: var(--warn-ink); }
+
+/* ============================ 空状态 ============================ */
+
+/* 空状态要教会用户怎么开始，而不是只说"这里没有东西"。
+   "真的空"和"筛出来是空"是两种完全不同的处境，给的建议也必须不同。 */
+.empty { padding: var(--gap-6) var(--gap-4); text-align: center; color: var(--ink-3); }
+.empty__icon { width: 40px; height: 40px; stroke-width: 1.5; color: var(--border-strong); margin-bottom: var(--gap-3); }
+.empty h3 { font-size: 0.9375rem; color: var(--ink-2); margin-bottom: var(--gap-1); }
+.empty p { margin: 0 0 var(--gap-3); font-size: 0.8125rem; }
+.empty p:last-child { margin-bottom: 0; }
+
+/* ============================ 提示条 ============================ */
+
+.banner {
+  display: flex; align-items: center; gap: var(--gap-3);
+  padding: var(--gap-3) var(--gap-4);
+  background: color-mix(in srgb, var(--ok) 10%, var(--surface-1));
+  border: 1px solid color-mix(in srgb, var(--ok) 35%, var(--border));
+  border-radius: var(--r-card);
+  margin-bottom: var(--gap-4);
+  animation: reveal 260ms var(--ease) both;
+}
+.banner .icon { color: var(--ok-ink); width: 18px; height: 18px; }
+.banner__body { flex: 1; min-width: 0; }
+.banner__title { font-size: 0.8125rem; color: var(--ink-2); }
+.banner__code {
+  font-family: var(--font-mono); font-size: 1.0625rem; font-weight: 600;
+  color: var(--ink); letter-spacing: 0.02em;
+}
+.banner .copy { width: 30px; height: 30px; }
+
+.alert {
+  display: flex; align-items: center; gap: var(--gap-2);
+  padding: var(--gap-3) var(--gap-4);
+  background: color-mix(in srgb, var(--critical) 10%, var(--surface-1));
+  border: 1px solid color-mix(in srgb, var(--critical) 35%, var(--border));
+  border-radius: var(--r-card);
+  margin-bottom: var(--gap-4);
+  color: var(--crit-ink); font-size: 0.8125rem;
+}
+
+/* ============================ 表单 / 创建 ============================ */
+
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  padding: var(--gap-4);
+}
+.card + .card { margin-top: var(--gap-4); }
+
+.field { margin-bottom: var(--gap-3); }
+.field label { display: block; font-size: 0.75rem; color: var(--ink-2); margin-bottom: 5px; }
+.field input { width: 100%; }
+.field__hint { font-size: 0.6875rem; color: var(--ink-3); margin-top: 4px; line-height: 1.5; }
+
+/* 两列而不是三列：有效天数那一格多了预设行，塞进三列会把这一列撑高，
+   导致旁边两个输入框和它不在同一水平线上。改成两列 + 有效期整行独占。 */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap-3); }
+.field--wide { grid-column: 1 / -1; }
+/* 预设已经给了常用值，输入框只需要够看清数字，不需要占满整行 */
+.field--wide input[type="number"] { max-width: 200px; }
+
+/* 创建面板本身也是一个 <details>：首次进入展开，有数据后收起，把版面让给列表。
+   摘要行做成按钮外观且始终可见，所以"收起来"不等于"找不到"。 */
+details.create > summary { cursor: pointer; list-style: none; width: fit-content; }
+details.create > summary::-webkit-details-marker { display: none; }
+details.create[open] > summary { margin-bottom: var(--gap-4); }
+/* 收起时收紧内边距：一个按钮不该占掉一张完整卡片的垂直空间 */
+details.create:not([open]) { padding: var(--gap-3) var(--gap-4); }
+
+/* 折叠的高级项：模型密钥不是每次都要填，默认收起来，减少每次建证要看的字段数。 */
+details.advanced { margin-bottom: var(--gap-3); }
+details.advanced > summary {
+  cursor: pointer; list-style: none;
+  font-size: 0.75rem; color: var(--ink-3);
+  display: inline-flex; align-items: center; gap: 5px; padding: 2px 0;
+}
+details.advanced > summary::-webkit-details-marker { display: none; }
+details.advanced > summary:hover { color: var(--ink-2); }
+details.advanced > summary .icon { width: 12px; height: 12px; transition: transform var(--dur) var(--ease); }
+details.advanced[open] > summary .icon { transform: rotate(90deg); }
+
+/* ============================ 登录 ============================ */
+
+.login-shell { min-height: 100vh; display: grid; place-items: center; padding: var(--gap-4); }
+.login {
+  width: 100%; max-width: 360px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  padding: var(--gap-5);
+}
+.login h1 { font-size: 1.0625rem; margin-bottom: var(--gap-1); }
+.login__sub { font-size: 0.8125rem; color: var(--ink-3); margin: 0 0 var(--gap-4); }
+.login .btn { width: 100%; padding: 9px; }
+.login__error {
+  display: flex; align-items: center; gap: var(--gap-2);
+  font-size: 0.8125rem; color: var(--crit-ink);
+  background: color-mix(in srgb, var(--critical) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--critical) 35%, transparent);
+  border-radius: var(--r-ctl);
+  padding: var(--gap-2) var(--gap-3);
+  margin-bottom: var(--gap-3);
+}
+
+/* ============================ 动效 ============================ */
+
+/* 只有"呈现新信息"这一个动作有入场动效（创建成功的提示条）。
+   不给每个区块都套同一个入场动画——那是噪音，不是设计。 */
+@keyframes reveal {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

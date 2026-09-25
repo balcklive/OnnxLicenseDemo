@@ -1,0 +1,103 @@
+@model LicenseServer.Data.DashboardStats
+@{
+    // 席位饱和度的严重程度决定 meter 填充色（accent → warning → danger）。
+    // 这是 dataviz 对 meter 的规定：填充承载严重度，底槽用同色系更暗的一档。
+    var pct = Math.Round(Model.SeatSaturation * 100);
+    var seatTone = Model.SeatSaturation >= 0.9 ? "is-critical"
+                 : Model.SeatSaturation >= 0.7 ? "is-warn"
+                 : "";
+}
+
+@* 首行：四个核心计数。刻意不做成四张等大的卡片 ——
+   等大卡片会让"许可证总数"和"未激活数"看起来权重相同，也白白吃掉本该用来分组的留白。
+   这里许可证总数占据更大的一格，其余三格并列。 *@
+<div class="metrics">
+    <div class="metric">
+        <div class="metric__label">许可证总数</div>
+        <div class="metric__value metric__value--lead">@Model.LicenseTotal</div>
+        <div class="metric__sub">
+            其中 <b>@Model.LicenseActivated</b> 张已有设备激活（@(Model.ActivationRate)%）
+        </div>
+    </div>
+    <div class="metric">
+        <div class="metric__label">设备总数</div>
+        <div class="metric__value">@Model.DeviceTotal</div>
+        <div class="metric__sub">未撤销的激活记录</div>
+    </div>
+    <div class="metric">
+        <div class="metric__label">已激活许可证</div>
+        <div class="metric__value">@Model.LicenseActivated</div>
+        <div class="metric__sub">至少 1 台设备在用</div>
+    </div>
+    <div class="metric">
+        <div class="metric__label">未激活许可证</div>
+        <div class="metric__value">@Model.LicenseUnactivated</div>
+        <div class="metric__sub">已发出但客户还没用起来</div>
+    </div>
+</div>
+
+@* 次行：三组分类指标。数字为 0 时一律走弱化色 ——
+   "0 张即将到期"是好消息，不该和"3 张已过期"长得一样醒目。 *@
+<div class="metrics metrics--sub">
+    <div class="metric">
+        <div class="metric__label">到期预警</div>
+        <div class="metric__row">
+            <span>7 天内到期</span>
+            <b class="@(Model.LicenseExpiring7d == 0 ? "is-zero" : "is-warn")">@Model.LicenseExpiring7d</b>
+        </div>
+        <div class="metric__row">
+            <span>30 天内到期</span>
+            <b class="@(Model.LicenseExpiring30d == 0 ? "is-zero" : "")">@Model.LicenseExpiring30d</b>
+        </div>
+        <div class="metric__row">
+            <span>已过期</span>
+            <b class="@(Model.LicenseExpired == 0 ? "is-zero" : "is-critical")">@Model.LicenseExpired</b>
+        </div>
+    </div>
+
+    @* 活跃度不是"越少越好"的指标，所以非零值不加告警色 ——
+       把"有 18 台在活跃"染成警告色是纯粹的错误信息。 *@
+    <div class="metric">
+        <div class="metric__label">活跃度</div>
+        <div class="metric__row">
+            <span>24 小时内有心跳</span>
+            <b class="@(Model.DeviceActive24h == 0 ? "is-zero" : "")">@Model.DeviceActive24h</b>
+        </div>
+        <div class="metric__row">
+            <span>7 天内有心跳</span>
+            <b class="@(Model.DeviceActive7d == 0 ? "is-zero" : "")">@Model.DeviceActive7d</b>
+        </div>
+        <div class="metric__row">
+            <span>超过 7 天无心跳</span>
+            <b class="@(Model.DeviceTotal - Model.DeviceActive7d <= 0 ? "is-zero" : "is-warn")">@(Model.DeviceTotal - Model.DeviceActive7d)</b>
+        </div>
+    </div>
+
+    <div class="metric">
+        <div class="metric__label">风险</div>
+        <div class="metric__row">
+            <span>已吊销许可证</span>
+            <b class="@(Model.LicenseRevoked == 0 ? "is-zero" : "")">@Model.LicenseRevoked</b>
+        </div>
+        <div class="metric__row">
+            <span>已撤销设备</span>
+            <b class="@(Model.DeviceRevoked == 0 ? "is-zero" : "")">@Model.DeviceRevoked</b>
+        </div>
+        <div class="metric__row">
+            <span>可用席位余量</span>
+            <b class="@(Model.SeatsTotal - Model.SeatsUsed <= 0 ? "is-critical" : "")">@(Model.SeatsTotal - Model.SeatsUsed)</b>
+        </div>
+    </div>
+</div>
+
+@* 席位饱和度：比例对上限 → meter，不是饼图（两片的饼图永远不如一根 meter 好读）。 *@
+<div class="seats">
+    <div class="seats__head">
+        <svg class="icon" aria-hidden="true"><use href="#i-shield" /></svg>
+        <span class="seats__label">席位饱和度 · 仅统计未吊销且未过期的许可证</span>
+        <span class="seats__value">@Model.SeatsUsed / @Model.SeatsTotal（@pct%）</span>
+    </div>
+    <div class="meter" role="img" aria-label="席位已用 @Model.SeatsUsed，共 @Model.SeatsTotal，占用 @(pct)%">
+        <div class="meter__fill @seatTone" style="width:@(pct)%"></div>
+    </div>
+</div>

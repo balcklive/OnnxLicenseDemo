@@ -1,105 +1,399 @@
 @page
 @model LicenseServer.Pages.Admin.IndexModel
+@{
+    var clock = Model.Clock;
 
-<h2>创建新许可证</h2>
-<div class="card">
-    <form method="post" asp-page-handler="Create">
-        <label>产品名称</label>
-        <input type="text" name="ProductName" required style="width:100%;box-sizing:border-box;margin-bottom:10px;" />
+    // <time> 只呈现服务器生成的日期（没有任何用户输入流经），
+    // 因此这里的 Html.Raw 是安全的。它把三件事绑在一起：
+    //   显示值 = 本地时间（管理员所在时区）
+    //   datetime = 机器可读的 ISO 时刻
+    //   title    = 原始 UTC，让"到底几点"永远可查证，不必信任转换
+    string TimeTag(DateTime utc, string fmt = "yyyy-MM-dd")
+        => $"<time datetime=\"{clock.Iso(utc)}\" title=\"{clock.UtcTitle(utc)}\">{clock.Format(utc, fmt)}</time>";
 
-        <label>有效天数</label>
-        <input type="number" name="ValidDays" value="365" required style="width:100%;box-sizing:border-box;margin-bottom:10px;" />
+    string SortHref(string slug)
+        => Url.Page("/Admin/Index", new { q = Model.Query, status = Model.Status, sort = slug }) ?? "#";
 
-        <label>最多可激活设备数</label>
-        <input type="number" name="MaxActivations" value="1" required style="width:100%;box-sizing:border-box;margin-bottom:10px;" />
-
-        <label>模型密钥（Base64，留空则自动生成新的；同一个onnx模型对应的所有客户建议填同一个值，这样模型只需加密一次）</label>
-        <input type="text" name="ModelKeyBase64" style="width:100%;box-sizing:border-box;margin-bottom:10px;" />
-
-        <button class="btn-primary" type="submit">生成激活码</button>
-    </form>
-
-    @if (!string.IsNullOrEmpty(Model.JustCreatedCode))
+    // 每列的排序方向是固定的（到期升序=最紧急在前，席位降序=最满在前……），
+    // 所以方向按列声明，而不是让用户来回切换正反序。
+    string SortDir(string slug) => slug switch
     {
-        <p style="margin-top:12px;">
-            已生成激活码：<strong style="font-size:16px;">@Model.JustCreatedCode</strong>
-            （请复制发给客户，此码不会再单独展示）
-        </p>
+        "expiry" => "ascending",
+        "name" => "ascending",
+        "created" => "descending",
+        "seats" => "descending",
+        _ => "none"
+    };
+    string ThClass(string slug) => Model.SortSlug == slug ? "is-sorted" : "";
+    // 排序状态不能只靠图标颜色差表达 —— 屏幕阅读器读不到颜色的差别。
+    string AriaSort(string slug) => Model.SortSlug == slug ? SortDir(slug) : "none";
+
+    var filteredOut = Model.TotalRows > 0 && Model.Licenses.Count == 0;
+    var firstRun = Model.TotalRows == 0;
+}
+
+<div class="page-head">
+    <h1>许可证</h1>
+    @if (firstRun)
+    {
+        <span class="muted">还没有数据，先在下面创建第一张许可证</span>
     }
 </div>
 
-<h2>许可证列表</h2>
-@foreach (var license in Model.Licenses)
+@* ============================ 数据大屏 ============================ *@
+<section class="panel" aria-label="总览">
+    <div class="panel__head">
+        <span class="panel__title">总览</span>
+        <span class="panel__note">
+            统计于 @clock.Format(Model.Now, "yyyy-MM-dd HH:mm")
+            @if (!clock.IsUtc)
+            {
+                @* 时区只标注一次，而不是每个日期后面都挂一遍 *@
+                <text>（@clock.ZoneLabel）</text>
+            }
+        </span>
+    </div>
+    <partial name="_Dashboard" model="Model.Stats" />
+</section>
+
+@* ============================ 创建结果 / 错误 ============================ *@
+@if (TempData["JustCreated"] is string newCode)
 {
-    <table>
-        <tr>
-            <th>激活码</th>
-            <td colspan="3">
-                @license.Code
-                @if (license.IsRevoked)
-                {
-                    <span class="badge badge-bad">已吊销</span>
-                }
-                else if (DateTime.UtcNow > license.ExpiryUtc)
-                {
-                    <span class="badge badge-bad">已过期</span>
-                }
-                else
-                {
-                    <span class="badge badge-ok">正常</span>
-                }
-            </td>
-        </tr>
-        <tr>
-            <th>产品</th><td>@license.ProductName</td>
-            <th>到期时间</th><td>@license.ExpiryUtc.ToString("yyyy-MM-dd") (UTC)</td>
-        </tr>
-        <tr>
-            <th>激活上限</th><td>@license.MaxActivations 台</td>
-            <th>操作</th>
-            <td>
-                @if (!license.IsRevoked)
-                {
-                    <form method="post" asp-page-handler="RevokeLicense" class="inline">
-                        <input type="hidden" name="id" value="@license.Id" />
-                        <button class="btn-danger" type="submit" onclick="return confirm('确定吊销整张许可证？所有设备都会立即失效。')">吊销整张许可证</button>
-                    </form>
-                }
-            </td>
-        </tr>
-        <tr>
-            <th colspan="4">已激活设备（@license.Activations.Count(a => !a.IsRevoked) / @license.MaxActivations）</th>
-        </tr>
-        @if (license.Activations.Count == 0)
+    <div class="banner">
+        <svg class="icon" aria-hidden="true"><use href="#i-check" /></svg>
+        <div class="banner__body">
+            <div class="banner__title">已生成激活码，复制发给客户即可</div>
+            @* 旧文案写的是"此码不会再单独展示"—— 这是错的，激活码一直显示在下方列表里。
+               错误的恐吓式提示会逼管理员去截图存档，多做一个没有必要的动作。 *@
+            <div class="banner__code" id="new-code">@newCode</div>
+        </div>
+        <button type="button" class="copy" data-copy="@newCode" data-copy-target="#new-code" title="复制激活码">
+            <svg class="icon" aria-hidden="true"><use href="#i-copy" /></svg>
+            <span class="sr-only">复制激活码</span>
+        </button>
+    </div>
+}
+
+@if (TempData["CreateError"] is string createError)
+{
+    <div class="alert" role="alert">
+        <svg class="icon" aria-hidden="true"><use href="#i-alert" /></svg>
+        创建失败：@createError
+    </div>
+}
+
+@* ============================ 创建 ============================ *@
+@* 首次进入时展开（此时页面上没有任何数据，创建就是唯一该做的事）；
+    有数据之后收起来，把版面让给列表。摘要行始终可见，所以不存在"藏起来找不到"。 *@
+<details class="card create" id="create" open="@(firstRun ? "open" : null)">
+    <summary class="btn btn--primary">
+        <svg class="icon" aria-hidden="true"><use href="#i-plus" /></svg>
+        新建许可证
+    </summary>
+
+    <form method="post" asp-page-handler="Create">
+        <div class="form-grid">
+            <div class="field">
+                <label for="f-product">产品名称</label>
+                <input id="f-product" type="text" name="ProductName" required placeholder="例如 bot-cs" />
+            </div>
+            <div class="field">
+                <label for="f-max">最多可激活设备数</label>
+                <input id="f-max" type="number" name="MaxActivations" value="1" min="1" max="10000" required />
+            </div>
+            @* 有效天数整行独占：预设按钮排得开，也不会把旁边两格顶得不在同一水平线上。 *@
+            <div class="field field--wide">
+                <label for="f-days">有效天数</label>
+                @* 预设是快捷键、不是表单字段：点一下把天数填进下面的输入框，
+                   提交上去的仍然只有 ValidDays 一个值。
+                   没有脚本时这些按钮点不动，但输入框照常可用 —— 退化成"手动输入"，而不是坏掉。 *@
+                <div class="chips" role="group" aria-label="常用有效期">
+                    @foreach (var preset in Model.DurationPresets)
+                    {
+                        <button type="button" class="chip"
+                                data-fill-days="@preset.Days"
+                                data-fill-target="f-days"
+                                aria-pressed="@(preset.Days == Model.DefaultValidDays ? "true" : "false")"
+                                title="@(preset.Title is null ? $"共 {preset.Days} 天" : $"{preset.Title} · 共 {preset.Days} 天")">@preset.Label</button>
+                    }
+                </div>
+                <input id="f-days" type="number" name="ValidDays" value="@Model.DefaultValidDays" min="1" max="3650" required />
+            </div>
+        </div>
+
+        @* 模型密钥不是每次都要填（留空会自动生成），默认收起来，
+           减少每次建证都必须扫过的字段数。 *@
+        <details class="advanced">
+            <summary>
+                <svg class="icon" aria-hidden="true"><use href="#i-chevron" /></svg>
+                模型密钥（高级，通常留空）
+            </summary>
+            <div class="field">
+                <label for="f-key">模型密钥（Base64）</label>
+                <input id="f-key" type="text" name="ModelKeyBase64" placeholder="留空则由服务器自动生成一把新密钥" />
+                <p class="field__hint">
+                    同一个 onnx 模型对应的所有客户要填<strong>同一把</strong>密钥，这样模型只需加密一次。
+                    留空会让服务器另生成一把 —— 客户端表现为「能激活、进得去界面、模型加载失败」。
+                </p>
+            </div>
+        </details>
+
+        <button class="btn btn--primary" type="submit">生成激活码</button>
+    </form>
+</details>
+
+@* ============================ 筛选 ============================ *@
+@* GET 表单：状态放查询串而不是服务端会话 —— 链接可分享、刷新不丢、前进后退可用。 *@
+<form class="filters" method="get">
+    <label class="filters__search">
+        <svg class="icon" aria-hidden="true"><use href="#i-search" /></svg>
+        <input type="search" name="q" value="@Model.Query"
+               placeholder="搜索激活码 / 产品名 / 机器指纹" aria-label="搜索许可证" />
+    </label>
+
+    <label class="sr-only" for="f-status">状态筛选</label>
+    <select id="f-status" name="status" onchange="this.form.submit()">
+        @foreach (var f in new[]
         {
-            <tr><td colspan="4" style="color:#999;">尚无设备激活</td></tr>
+            LicenseFilter.All, LicenseFilter.Active, LicenseFilter.ExpiringSoon,
+            LicenseFilter.Expired, LicenseFilter.Revoked, LicenseFilter.Unactivated
+        })
+        {
+            <option value="@f.Slug()" selected="@(Model.Filter == f)">@f.Label()</option>
+        }
+    </select>
+
+    @* 排序切换时保留当前排序意图的那个值，否则切筛选会把排序重置 *@
+    <input type="hidden" name="sort" value="@Model.SortSlug" />
+
+    <span class="filters__spacer"></span>
+
+    <span class="filters__count">
+        @if (Model.HasFilter)
+        {
+            <text>筛出 @Model.Licenses.Count 张 / 共 @Model.TotalRows 张</text>
         }
         else
         {
-            <tr>
-                <th>机器指纹</th><th>激活时间</th><th>最后心跳时间</th><th>操作</th>
-            </tr>
-            foreach (var act in license.Activations)
-            {
-                <tr>
-                    <td>
-                        @act.MachineId.Substring(0, Math.Min(16, act.MachineId.Length))...
-                        @(string.IsNullOrEmpty(act.MachineName) ? "" : $"（{act.MachineName}）")
-                        @if (act.IsRevoked) { <span class="badge badge-bad">已撤销</span> }
-                    </td>
-                    <td>@act.ActivatedUtc.ToString("yyyy-MM-dd HH:mm") UTC</td>
-                    <td>@act.LastHeartbeatUtc.ToString("yyyy-MM-dd HH:mm") UTC</td>
-                    <td>
-                        @if (!act.IsRevoked)
-                        {
-                            <form method="post" asp-page-handler="RevokeActivation" class="inline">
-                                <input type="hidden" name="id" value="@act.Id" />
-                                <button class="btn-danger" type="submit" onclick="return confirm('撤销这台设备的激活？该设备会立即失效，释放出的名额可用于激活新设备。')">撤销此设备</button>
-                            </form>
-                        }
-                    </td>
-                </tr>
-            }
+            <text>共 @Model.TotalRows 张</text>
         }
-    </table>
-}
+    </span>
+
+    <button class="btn btn--sm" type="submit">筛选</button>
+    @if (Model.HasFilter)
+    {
+        <a class="btn btn--ghost btn--sm" href="@Url.Page("/Admin/Index")">清除</a>
+    }
+</form>
+
+@* ============================ 列表 ============================ *@
+<div class="table-wrap">
+    @if (Model.Licenses.Count == 0)
+    {
+        @* 两种"空"是完全不同的处境，给的动作也必须不同：
+           一种是还没有任何数据，另一种是筛选把结果滤没了。 *@
+        if (filteredOut)
+        {
+            <div class="empty">
+                <svg class="icon empty__icon" aria-hidden="true"><use href="#i-search-x" /></svg>
+                <h3>没有符合条件的许可证</h3>
+                <p>当前筛选：@Model.Filter.Label()@(string.IsNullOrWhiteSpace(Model.Query) ? "" : $" · 关键词「{Model.Query}」")</p>
+                <p><a href="@Url.Page("/Admin/Index")">清除筛选，查看全部 @Model.TotalRows 张</a></p>
+            </div>
+        }
+        else
+        {
+            <div class="empty">
+                <svg class="icon empty__icon" aria-hidden="true"><use href="#i-inbox" /></svg>
+                <h3>还没有任何许可证</h3>
+                <p>在上面的「新建许可证」里填好产品名和有效期，就能生成第一个激活码发给客户。</p>
+            </div>
+        }
+    }
+    else
+    {
+        <table class="list">
+            <thead>
+                <tr>
+                    <th class="@ThClass("created")" aria-sort="@AriaSort("created")">
+                        <a href="@SortHref("created")">
+                            激活码
+                            <svg class="icon" aria-hidden="true"><use href="#i-sort" /></svg>
+                        </a>
+                    </th>
+                    <th class="@ThClass("name")" aria-sort="@AriaSort("name")">
+                        <a href="@SortHref("name")">
+                            产品
+                            <svg class="icon" aria-hidden="true"><use href="#i-sort" /></svg>
+                        </a>
+                    </th>
+                    <th>状态</th>
+                    <th class="@ThClass("seats")" aria-sort="@AriaSort("seats")">
+                        <a href="@SortHref("seats")">
+                            席位
+                            <svg class="icon" aria-hidden="true"><use href="#i-sort" /></svg>
+                        </a>
+                    </th>
+                    <th class="@ThClass("expiry")" aria-sort="@AriaSort("expiry")">
+                        <a href="@SortHref("expiry")">
+                            到期
+                            <svg class="icon" aria-hidden="true"><use href="#i-sort" /></svg>
+                        </a>
+                    </th>
+                    <th>最后心跳</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var license in Model.Licenses)
+                {
+                    var state = license.State(Model.Now);
+                    var used = license.UsedSeats();
+                    var full = license.IsSeatFull();
+                    var latest = license.Activations.Where(a => !a.IsRevoked)
+                                        .Select(a => (DateTime?)a.LastHeartbeatUtc).Max();
+                    var activeCount = license.Activations.Count(a => !a.IsRevoked);
+
+                    <tr class="row" data-state="@state.ToString().ToLowerInvariant()">
+                        <td>
+                            <div class="code-cell">
+                                <span class="code">@license.Code</span>
+                                <button type="button" class="copy" data-copy="@license.Code" title="复制激活码">
+                                    <svg class="icon" aria-hidden="true"><use href="#i-copy" /></svg>
+                                    <span class="sr-only">复制激活码 @license.Code</span>
+                                </button>
+                            </div>
+                            @if (license.Activations.Count > 0)
+                            {
+                                @* <details> 在 HTML 里无法包住 <tr>，所以摘要留在本行，
+                                   展开后的子表放在紧随其后的一行，由 CSS 的 :has() 关联。
+                                   完整说明见 console.css 里 .subrow 那段注释。 *@
+                                <details class="devices">
+                                    <summary>
+                                        <svg class="icon" aria-hidden="true"><use href="#i-chevron" /></svg>
+                                        @activeCount 台设备@(license.Activations.Count > activeCount ? $"（另有 {license.Activations.Count - activeCount} 台已撤销）" : "")
+                                    </summary>
+                                </details>
+                            }
+                            else
+                            {
+                                <span class="muted text-xs">尚无设备激活</span>
+                            }
+                        </td>
+                        <td>@license.ProductName</td>
+                        <td>
+                            <span class="badge badge--@state.Tone()">
+                                <svg class="icon" aria-hidden="true"><use href="#@state.Icon()" /></svg>
+                                @state.Label()
+                            </span>
+                        </td>
+                        <td>
+                            <div class="seat">
+                                <span class="seat__num @(full ? "is-full" : "")"><b>@used</b> / @license.MaxActivations</span>
+                                <span class="seat__bar @(full ? "is-full" : "")">
+                                    <i style="width:@(license.MaxActivations == 0 ? 0 : Math.Min(100, used * 100 / license.MaxActivations))%"></i>
+                                </span>
+                            </div>
+                        </td>
+                        <td class="nowrap">@Html.Raw(TimeTag(license.ExpiryUtc))</td>
+                        <td class="nowrap">
+                            @if (latest is DateTime hb)
+                            {
+                                var stale = Model.Now - hb > TimeSpan.FromDays(LicenseStatus.StaleHeartbeatDays);
+                                <span class="@(stale ? "muted" : "")"
+                                      title="@clock.UtcTitle(hb)">
+                                    @clock.Relative(hb, Model.Now)
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="muted">—</span>
+                            }
+                        </td>
+                        <td>
+                            @if (!license.IsRevoked)
+                            {
+                                <form method="post" asp-page-handler="RevokeLicense">
+                                    <input type="hidden" name="id" value="@license.Id" />
+                                    <button class="btn btn--danger btn--sm" type="submit"
+                                            onclick="return confirm('确定吊销整张许可证？该证下所有设备会立即失效（最迟 10 分钟内停止自动功能）。')">
+                                        吊销
+                                    </button>
+                                </form>
+                            }
+                            else
+                            {
+                                <span class="muted">—</span>
+                            }
+                        </td>
+                    </tr>
+
+                    @if (license.Activations.Count > 0)
+                    {
+                        <tr class="subrow">
+                            <td colspan="7">
+                                <table class="subtable">
+                                    <thead>
+                                        <tr>
+                                            <th>机器指纹</th>
+                                            <th>机器名</th>
+                                            <th>激活时间</th>
+                                            <th>最后心跳</th>
+                                            <th>操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var act in license.Activations
+                                            .OrderBy(a => a.IsRevoked)
+                                            .ThenByDescending(a => a.LastHeartbeatUtc))
+                                        {
+                                            var actStale = act.IsStale(Model.Now);
+                                            <tr data-revoked="@(act.IsRevoked ? "1" : "0")" class="@(actStale ? "is-stale" : "")">
+                                                <td>
+                                                    <div class="code-cell">
+                                                        <span class="code code--sm" title="@act.MachineId">
+                                                            @(act.MachineId.Length > 20 ? act.MachineId[..20] + "…" : act.MachineId)
+                                                        </span>
+                                                        <button type="button" class="copy" data-copy="@act.MachineId" title="复制完整机器指纹">
+                                                            <svg class="icon" aria-hidden="true"><use href="#i-copy" /></svg>
+                                                            <span class="sr-only">复制机器指纹</span>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                                <td>@(string.IsNullOrWhiteSpace(act.MachineName) ? "—" : act.MachineName)</td>
+                                                <td class="nowrap">@Html.Raw(TimeTag(act.ActivatedUtc))</td>
+                                                <td class="nowrap hb">
+                                                    @clock.Relative(act.LastHeartbeatUtc, Model.Now)
+                                                    @if (actStale)
+                                                    {
+                                                        <span class="muted">· 疑似已弃用</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (!act.IsRevoked)
+                                                    {
+                                                        <form method="post" asp-page-handler="RevokeActivation">
+                                                            <input type="hidden" name="id" value="@act.Id" />
+                                                            <button class="btn btn--danger btn--sm" type="submit"
+                                                                    onclick="return confirm('撤销这台设备的激活？该设备会立即失效，释放出的名额可用于激活新设备。')">
+                                                                撤销此设备
+                                                            </button>
+                                                        </form>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="muted">已撤销</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    }
+</div>

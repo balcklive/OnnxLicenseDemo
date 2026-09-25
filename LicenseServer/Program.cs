@@ -12,6 +12,8 @@ var connectionString = builder.Configuration.GetConnectionString("Default")
 builder.Services.AddDbContext<AppDbContext>(opt => opt.UseNpgsql(connectionString));
 
 builder.Services.AddSingleton<JwtService>();
+// 时间显示用的时区转换。只影响"输出"，所有判断仍在 UTC 下做 —— 见 DisplayClock 里的注释。
+builder.Services.AddSingleton<DisplayClock>();
 builder.Services.AddRazorPages();
 
 // ---- 管理后台登录用的 Cookie 认证（内置、成熟，不依赖第三方库）----
@@ -33,6 +35,11 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseHttpsRedirection();
+
+// 必须在 UseAuthentication 之前：登录页也要能拿到 CSS，
+// 否则未登录时页面是无样式的裸 HTML。
+app.UseStaticFiles();
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapRazorPages();
