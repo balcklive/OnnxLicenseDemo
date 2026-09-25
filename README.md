@@ -10,7 +10,8 @@ OnnxLicenseDemo/
 ├── nginx/              # 反向代理 + HTTPS 配置示例
 ├── docker-compose.yml  # 一键编排 LicenseServer + PostgreSQL + Nginx
 ├── DEPLOY.md           # 完整的云服务器部署步骤（证书、compose、后台登录）
-├── DEPLOY-IP-SELFSIGNED.md  # 无域名路线：IP + 自签证书 + 非标端口（免备案，客户机零安装）
+├── DEPLOY-IP-SELFSIGNED.md  # 无域名路线：IP + 自签证书 + 非标端口（免备案，客户机零安装，
+│                        #   自包含全流程：空服务器 → .env → 签证书 → 后台建证 → 出包）
 ├── USAGE.md            # 用法手册：启动/自检/发码席位撤销/机器规格/故障对照表
 └── README.md           # 本文件：结构、容器格式、命令速查、安全边界
 ```
