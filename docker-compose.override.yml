@@ -1,0 +1,21 @@
+# 本机部署覆盖：不经 nginx，把授权服务器直接映射到宿主机 18080。
+#
+# 注意改的是冒号左边（宿主机端口），右边 8080 是容器内端口，别动 ——
+# 容器里监听 8080 是 Dockerfile 里 ASPNETCORE_URLS=http://+:8080 定的。
+# 所以改这里不影响 nginx/license.conf 里的 proxy_pass http://licenseserver:8080。
+# 想再换端口，只改下面 ports 左边那个数字即可。
+#
+# docker compose 会自动加载本文件并与 docker-compose.yml 合并。
+# 以后要正式上域名 + HTTPS 时，删掉这个文件，按 DEPLOY.md 走 nginx + certbot 那套即可。
+# 注意：此形态下流量是明文 HTTP，只适合本机验证，不要拿它对外提供服务。
+#
+# 关于 db 的 image：本机到 Docker Hub（registry-1.docker.io）不通（DNS 只解析出 IPv6 且连不上），
+# 所以显式走可达的镜像源。mcr.microsoft.com（Dockerfile 里的 dotnet 基础镜像）直连正常，不需要改。
+# 换一台能正常访问 Docker Hub 的机器部署时，删掉这段 db.image 即可。
+services:
+  db:
+    image: docker.m.daocloud.io/library/postgres:16
+
+  licenseserver:
+    ports:
+      - "18080:8080"
