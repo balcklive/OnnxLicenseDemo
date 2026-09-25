@@ -298,7 +298,15 @@ curl --cacert certs/ca.crt -i -X POST https://182.42.59.49:9443/api/heartbeat \
 在**打包机**上跑：
 
 ```powershell
+mkdir D:\keys -Force     # ⚠ keygen 不会自建父目录，缺了会报 "Could not find a part of the path"
 dotnet run --project ModelProtector -c Release -- keygen --out D:\keys\bot-cs.model.key
+```
+
+产出的是一行 base64（32 字节 AES-256）。核对办法（**别把密钥本身打出来**）：
+
+```powershell
+$k = (Get-Content D:\keys\bot-cs.model.key -Raw).Trim()
+"$($k.Length) 个字符（应为 44）"        # 32 字节 → base64 44 字符
 ```
 
 文件里是一行 base64（32 字节 AES-256）。它**不进仓库、不进交付包**，只登记进服务器数据库 +
