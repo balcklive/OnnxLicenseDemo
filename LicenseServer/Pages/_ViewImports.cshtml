@@ -1,3 +1,8 @@
 @namespace LicenseServer.Pages
 @using Microsoft.AspNetCore.Mvc.RazorPages
 @using LicenseServer.Data
+
+@* 启用 Razor 内置 tag helper。这一行不能删：
+   少了它，<form method="post"> 不会被注入防伪 token，asp-page-handler 也退化成普通属性，
+   后果是后台登录、建证、撤销按钮的 POST 一律被防伪校验挡下，返回 HTTP 400。 *@
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
