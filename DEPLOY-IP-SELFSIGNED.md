@@ -141,7 +141,9 @@ cd ..   # 回到仓库根
 | `certs/ca.key` | **离线保存**，签完就从服务器删掉 | **是，最高级机密** |
 | `certs/server.crt` `certs/server.key` | nginx 用（第 5 步） | 公钥 / 私钥 |
 
-> `certs/` 目录已被 `.gitignore` 排除（`.gitignore` 里有 `*.key`），不会误入库。
+> ⚠️ **确认 `certs/` 整个目录在 `.gitignore` 里**。只靠 `*.key` 挡不住——它只管私钥，
+> `ca.crt` / `server.crt` / `ca.srl` / `san.ext` 这几个会被 git 当成未跟踪文件逮住。
+> 签名机上补一行 `certs/` 即可（这是一次性的，补完就不用管了）。
 
 ---
 
