@@ -85,7 +85,8 @@ app.MapPost("/api/activate", async (ActivateRequest req, AppDbContext db, JwtSer
     }
     await db.SaveChangesAsync();
 
-    var (token, expiresUtc) = jwt.IssueToken(req.MachineId, license.Code, license.ProductName, license.ModelKeyBase64, TimeSpan.FromDays(5));
+    var (token, expiresUtc) = jwt.IssueToken(req.MachineId, license.Code, license.ProductName, license.ModelKeyBase64,
+        TimeSpan.FromDays(5), license.ExpiryUtc);
     return Results.Ok(new TokenResponse(token, expiresUtc));
 });
 
@@ -106,7 +107,10 @@ app.MapPost("/api/heartbeat", async (ActivateRequest req, AppDbContext db, JwtSe
     activation.LastHeartbeatUtc = DateTime.UtcNow;
     await db.SaveChangesAsync();
 
-    var (token, expiresUtc) = jwt.IssueToken(req.MachineId, license.Code, license.ProductName, license.ModelKeyBase64, TimeSpan.FromDays(5));
+    // 第 6 个参数是订阅到期（客户买的时长），客户端顶栏的"剩余天数"靠它；
+    // 与 TimeSpan.FromDays(5) 那个离线宽限期不是一回事。
+    var (token, expiresUtc) = jwt.IssueToken(req.MachineId, license.Code, license.ProductName, license.ModelKeyBase64,
+        TimeSpan.FromDays(5), license.ExpiryUtc);
     return Results.Ok(new TokenResponse(token, expiresUtc));
 });
 

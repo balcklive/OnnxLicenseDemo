@@ -89,6 +89,10 @@ inspect     --in <f>
 - 发版验收、发码/席位/撤销、客户排障（`BotCs.exe --license-check`）：见 `bot-cs/docs/licensing.md`。
 - 服务器地址**不进** `config.json`（那是入库文件），随包走 `license.override.json`，临时覆盖用环境变量 `BOTCS_LICENSE_URL`。
 - 客户端只认 `RS256`、必须校验 `machine` claim，并每 10 分钟向 `/api/heartbeat` 续期（吊销在下一次心跳生效）。
+- 令牌除 `machine/license/product/modelKey/exp` 外还带 **`subExp`**（订阅到期，unix 秒 = `LicenseKey.ExpiryUtc`）——
+  客户端顶栏的「授权 剩余 N 天」只认它。⚠ 与 `exp` **不是一回事**：`exp` 只是 5 天离线宽限期、每次心跳重置，
+  拿它当剩余天数会让客户天天看到"还剩 5 天"。客户端读到没有该 claim 的老令牌时显示「授权：天数未知」占位，
+  不报错也不告警（服务端升级当天全体存量客户都是这个状态，最多 10 分钟随下一次心跳补上）。
 - 三个 csproj 都设了 `RollForward=LatestMajor`：只有 .NET 10 运行时的机器上，即便目标框架是 net8/9 也能直接跑。
 
 ## 诚实的安全边界说明

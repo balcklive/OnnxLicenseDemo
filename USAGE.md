@@ -119,7 +119,7 @@ powershell -ExecutionPolicy Bypass -File .\tools\publish-portable.ps1 `
 - **撤销整张证** = 该证下所有设备在下一次心跳时全部失效（403 `激活码已被吊销`）。
 - **到期** = 服务器拒绝 403 `订阅已过期，请续费`。⚠ 后台**没有改有效期的入口**（只有创建/撤销两类操作），
   续费要手工 `UPDATE "LicenseKeys" SET "ExpiryUtc" = ... WHERE "Code" = '...'`（表名大小写敏感，要带引号），
-  改完客户下一次心跳自然通过。
+  改完客户下一次心跳自然通过，**客户端顶栏的「授权 剩余 N 天」也跟着刷新**（想立刻看到就让他重启程序）。
 - 生效延迟：客户端心跳节拍 **10 分钟**（`LicenseDefaults.HeartbeatInterval`），断网时按 **60 秒**重试，所以撤销最迟 10 分钟见效。
 - ⚠ 已经在内存里的那份权重停不掉（要换图或重启才失效）——**这条要提前对客户讲清楚**，别当成 bug。
 - 一张证别横向卖给多个客户：共用一张证意味着一个人的欠费会连带所有人掉线。
@@ -133,12 +133,16 @@ powershell -ExecutionPolicy Bypass -File .\tools\publish-portable.ps1 `
 3. 编译进 exe 的内置值（正常交付包里指向 `license.invalid` 占位，会被判成“未配置”并要求联网激活）。
 
 - **都不进 `config.json`**：那是入库文件，而 GUI 保存写的是整份配置。服务器地址与激活码一律按凭证对待。
+- 服务器地址也**不上客户端 GUI**（激活窗口、失效弹框都只显示中性词，见 `bot-cs` 的
+  `Infrastructure/Licensing/AGENTS.md`）。要让客户核对连的是哪台，让他跑 `BotCs.exe --license-check`，
+  那是唯一会打印地址的地方。日志里也只打 host。
 - 非回环地址必须 `https://`，否则解析直接失败（不是“凑合用”）。
 - 本机状态目录 `%LOCALAPPDATA%\BotCs\license\`（整目录可用 `BOTCS_LICENSE_HOME` 指走）：
   `activation_state.bin`（DPAPI 加密，存**客户输入的那张码**）、`server_public_key.pem`、`machine_id.json`（兜底 id）。
   刻意不放 exe 旁边：交付包按目录整体覆盖升级，放 exe 旁等于每次发版全体客户重新激活、自己把席位刷爆。
 - 令牌默认有效期 **5 天**（`LicenseServer/Services/JwtService.cs` 里的 `TimeSpan.FromDays(5)`）= 最多容忍断网 5 天；
   离线宽限用的仍是**签名有效**的缓存令牌，拿不到公钥就判“离线不可用”，不会退化成只看本地时间。
+  这个 5 天与客户买的时长无关，别混（客户看到的是令牌里的 `subExp`）。
 - 客户端 HTTP 超时 12 秒。后台登录是**单一管理员口令**（只存 SHA-256），没有多账号、没有操作日志。
 
 ## 7. 机器规格与负载
