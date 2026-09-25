@@ -66,12 +66,33 @@
             @* 旧文案写的是"此码不会再单独展示"—— 这是错的，激活码一直显示在下方列表里。
                错误的恐吓式提示会逼管理员去截图存档，多做一个没有必要的动作。 *@
             <div class="banner__code" id="new-code">@newCode</div>
+            @* 指纹是这张证能不能解开模型的自证。打包时 publish-portable.ps1 会打印同一算法
+               的指纹，两边对不上就说明这一栏填的不是包里加密用的那把——在建证这一刻就能发现，
+               不用等客户报"能激活但模型加载失败"。 *@
+            @if (TempData["JustCreatedKeyFingerprint"] is string newKeyFingerprint)
+            {
+                <div class="banner__meta">
+                    模型密钥指纹：<code>@newKeyFingerprint</code>
+                    <span class="muted text-xs">（应与打包脚本打印的指纹一致）</span>
+                </div>
+            }
         </div>
         <button type="button" class="copy" data-copy="@newCode" data-copy-target="#new-code" title="复制激活码">
             <svg class="icon" aria-hidden="true"><use href="#i-copy" /></svg>
             <span class="sr-only">复制激活码</span>
         </button>
     </div>
+
+    @* 服务器现生成的密钥是**读不回来**的，所以这一条必须醒目：管理员多半正打算把这张码发给客户。 *@
+    @if (TempData["JustCreatedKeyWasGenerated"] is true)
+    {
+        <div class="alert" role="alert">
+            <svg class="icon" aria-hidden="true"><use href="#i-alert" /></svg>
+            这张证用的是<strong>服务器自动生成的密钥</strong>，而它和交付包里加密模型用的那把不是同一把 ——
+            客户能激活、能进界面，但<strong>模型会加载失败</strong>，且服务端日志看不出任何异常。
+            要发给客户的话请重新建一张，把打包时用的模型密钥粘贴进去。
+        </div>
+    }
 }
 
 @if (TempData["CreateError"] is string createError)
@@ -121,22 +142,25 @@
             </div>
         </div>
 
-        @* 模型密钥不是每次都要填（留空会自动生成），默认收起来，
-           减少每次建证都必须扫过的字段数。 *@
-        <details class="advanced">
-            <summary>
-                <svg class="icon" aria-hidden="true"><use href="#i-chevron" /></svg>
-                模型密钥（高级，通常留空）
-            </summary>
-            <div class="field">
-                <label for="f-key">模型密钥（Base64）</label>
-                <input id="f-key" type="text" name="ModelKeyBase64" placeholder="留空则由服务器自动生成一把新密钥" />
-                <p class="field__hint">
-                    同一个 onnx 模型对应的所有客户要填<strong>同一把</strong>密钥，这样模型只需加密一次。
-                    留空会让服务器另生成一把 —— 客户端表现为「能激活、进得去界面、模型加载失败」。
-                </p>
-            </div>
-        </details>
+        @* 这一栏原来藏在两层 <details> 里、summary 还写着"高级，通常留空"、placeholder 又说
+           "留空则由服务器自动生成一把新密钥"——三处一起劝人别填。实际后果是连着三张证都空提交、
+           服务器各生成一把随机密钥，而那种证**永远解不开自己的模型**，症状只在客户机上出现。
+
+           对本产品的口径（一个产品一把密钥、一个产品只做一次）来说这个默认是反的：
+           这一栏几乎永远要填。所以移出折叠、改成常规字段，并把"留空会怎样"写在伸手可及的地方。
+           那段警告原来就在，但只有你展开了那个劝你别填的折叠之后才看得到。 *@
+        <div class="field">
+            <label for="f-key">模型密钥（Base64）—— 粘贴打包时用的那一把</label>
+            <input id="f-key" type="text" name="ModelKeyBase64"
+                   placeholder="粘贴 publish-portable.ps1 -ModelKeyFile 用的那把密钥（44 个字符）" />
+            <p class="field__hint">
+                同一个产品下所有客户填<strong>同一把</strong>，模型只需加密一次。
+                <strong>留空</strong>会让服务器现生成一把，而后台没有任何入口能把它读回来 ——
+                那张证以后无论换哪台机器，客户端都是「能激活、进得去界面、<strong>模型加载失败</strong>」，
+                而服务端日志一切正常。<br />
+                建证后页面会显示这把密钥的<strong>指纹</strong>，跟打包脚本打印的指纹对一下就知道有没有填错。
+            </p>
+        </div>
 
         <button class="btn btn--primary" type="submit">生成激活码</button>
     </form>
@@ -280,7 +304,14 @@
                                 <span class="muted text-xs">尚无设备激活</span>
                             }
                         </td>
-                        <td>@license.ProductName</td>
+                        <td>
+                            @license.ProductName
+                            @* 指纹挂在产品名下面、不单开一列：它是"对账用"的次要信息，不值得为此再撑宽
+                               一列。它与打包脚本打印的、以及客户端 --license-check 输出的是同一个算法。 *@
+                            <div class="muted text-xs" title="模型密钥的 SHA-256 前 4 字节；应与打包脚本打印的指纹一致">
+                                密钥 <code>@license.ModelKeyFingerprint()</code>
+                            </div>
+                        </td>
                         <td>
                             <span class="badge badge--@state.Tone()">
                                 <svg class="icon" aria-hidden="true"><use href="#@state.Icon()" /></svg>

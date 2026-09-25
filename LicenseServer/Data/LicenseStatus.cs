@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+
 namespace LicenseServer.Data;
 
 // 许可证"有效性"状态。注意它与"有没有设备激活"是两件独立的事：
@@ -52,6 +54,33 @@ public static class LicenseStatus
 
     public static bool IsStale(this Activation a, DateTime utcNow) =>
         !a.IsRevoked && utcNow - a.LastHeartbeatUtc > TimeSpan.FromDays(StaleHeartbeatDays);
+
+    /// <summary>
+    /// 模型密钥的指纹：SHA-256 前 4 字节的十六进制，**与客户端
+    /// <c>ModelVault.InstalledKeyFingerprint</c> 是同一个算法**（那边也是 hash 前 4 字节转大写十六进制）。
+    /// 两边用同一个值，才能在"客户端日志说 8A5C195A、后台说 9300C547"时当场判定密钥不是同一把。
+    ///
+    /// <para>为什么值得摆在页面上：建证时把"模型密钥"留空，服务器会自动生成一把，而症状是
+    /// **客户能激活、进得去界面、模型加载失败**——服务器日志一切正常，只有客户机上的
+    /// <c>--license-check</c> 会红。这个错在页面上多一个数字就变成一眼可见。</para>
+    ///
+    /// <para>4 字节（32 位）与前缀而非完整散列是刻意的：它只用于对账，不构成对密钥本身的
+    /// 可离线验证的承诺。这也是客户端日志一直以来的口径。</para>
+    /// </summary>
+    public static string ModelKeyFingerprint(this LicenseKey l) => FingerprintOf(l.ModelKeyBase64);
+
+    public static string FingerprintOf(string? modelKeyBase64)
+    {
+        if (string.IsNullOrWhiteSpace(modelKeyBase64)) return "（空）";
+        try
+        {
+            var key = Convert.FromBase64String(modelKeyBase64.Trim());
+            return Convert.ToHexString(SHA256.HashData(key), 0, 4);
+        }
+        // 手工 SQL 或外部脚本直接写库时可能塞进非 base64 的串。页面上要显示"这是个坏值"
+        // 而不是让整个列表页 500。
+        catch (FormatException) { return "（非法 base64）"; }
+    }
 
     // 中文标签。与视图解耦，保证大屏、列表、徽章三处永远说的是同一个词。
     public static string Label(this LicenseState s) => s switch

@@ -147,9 +147,13 @@ public class IndexModel : PageModel
             return RedirectToPage(new { q = Query, status = Status, sort = Sort });
         }
 
-        var modelKey = string.IsNullOrWhiteSpace(modelKeyBase64)
+        // 留空 = 服务器现生成一把。这条路**保留但不再被推荐**：后台没有任何入口能把生成的密钥
+        // 读回来，所以它产出的是一张"永远解不开自己模型"的证——客户端能激活、能进界面，
+        // 只有模型加载会失败，而且服务端日志一切正常。页面上把这件事说清楚，见 Index.cshtml。
+        var keyWasGenerated = string.IsNullOrWhiteSpace(modelKeyBase64);
+        var modelKey = keyWasGenerated
             ? Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
-            : modelKeyBase64.Trim();
+            : modelKeyBase64!.Trim();
 
         var now = DateTime.UtcNow;
         var license = new LicenseKey
@@ -166,6 +170,10 @@ public class IndexModel : PageModel
 
         // TempData 跨过一次重定向把激活码带到列表页。
         TempData["JustCreated"] = license.Code;
+        // 指纹与"这把是不是服务器生成的"一起带过去：它是唯一能在建证那一刻就发现
+        // "密钥跟包里的密文不是同一把"的信息（客户端 --license-check 也会打印同一个值）。
+        TempData["JustCreatedKeyFingerprint"] = license.ModelKeyFingerprint();
+        TempData["JustCreatedKeyWasGenerated"] = keyWasGenerated;
         return RedirectToPage(new { q = Query, status = Status, sort = Sort });
     }
 

@@ -472,6 +472,12 @@ tr.row:has(details.devices[open]) + .subrow { display: table-row; }
   color: var(--ink); letter-spacing: 0.02em;
 }
 .banner .copy { width: 30px; height: 30px; }
+/* 建证后那一行密钥指纹：比激活码弱一档，但必须看得清——它是"这张证能不能解开模型"的唯一凭据。 */
+.banner__meta {
+  margin-top: 2px; font-size: 0.75rem; color: var(--ink-2);
+  display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
+}
+.banner__meta code { font-family: var(--font-mono); color: var(--ink); }
 
 .alert {
   display: flex; align-items: center; gap: var(--gap-2);
