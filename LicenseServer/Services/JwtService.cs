@@ -15,10 +15,14 @@ namespace LicenseServer.Services;
 public class JwtService
 {
     private readonly RSA _rsa;
+    private readonly string? _perceptionToken;
     public string Issuer { get; } = "LicenseServer";
 
     public JwtService(IConfiguration config)
     {
+        // 板端感知服务的共享 token。配置了就签进令牌，客户端激活后即可直接连板端，
+        // 不需要在客户机上再放 perception.token 侧车文件。
+        _perceptionToken = config["PERCEPTION_TOKEN"];
         var keysDir = config["KEYS_DIR"] ?? "./keys";
         Directory.CreateDirectory(keysDir);
         var privatePath = Path.Combine(keysDir, "private_key.pem");
@@ -57,6 +61,9 @@ public class JwtService
             new Claim("product", productName),
             new Claim("modelKey", modelKeyBase64),
         };
+
+        if (!string.IsNullOrWhiteSpace(_perceptionToken))
+            claims.Add(new Claim("perceptionToken", _perceptionToken));
 
         // unix 秒，与 exp 同格式。显式 SpecifyKind：Npgsql 读回来的 timestamptz 可能是
         // Kind=Unspecified，而 DateTimeOffset 对 Unspecified 会**按本机时区**解释，

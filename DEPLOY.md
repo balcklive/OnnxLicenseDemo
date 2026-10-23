@@ -21,11 +21,13 @@ cp .env.example .env
 nano .env   # 填好下面两个值
 ```
 
-`.env` 需要两个值：
+`.env` 需要两个必填值（`PERCEPTION_TOKEN` 可选）：
 
 ```
 DB_PASSWORD=一个随便设的数据库密码，别用弱密码
 ADMIN_PASSWORD_SHA256=你管理员密码的SHA256哈希
+# 可选：板端感知服务 token，配置后签进授权令牌，客户端无需 perception.token 侧车
+PERCEPTION_TOKEN=
 ```
 
 生成密码哈希（把 `你的密码` 换成实际密码）：

@@ -18,6 +18,8 @@ services:
       ConnectionStrings__Default: "Host=db;Database=licenses;Username=license_app;Password=${DB_PASSWORD:?}"
       ADMIN_PASSWORD_SHA256: ${ADMIN_PASSWORD_SHA256:?请在 .env 里设置 ADMIN_PASSWORD_SHA256}
       KEYS_DIR: /app/keys
+      # 板端感知服务的共享 token；配置后会签进授权令牌的 perceptionToken claim。
+      PERCEPTION_TOKEN: ${PERCEPTION_TOKEN:-}
     volumes:
       - jwt_keys:/app/keys   # 一定要持久化！容器重启丢了密钥，所有已发出的客户端令牌全部失效
     networks: [internal]
