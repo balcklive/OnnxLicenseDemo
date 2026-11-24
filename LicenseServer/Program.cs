@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using LicenseServer.Data;
 using LicenseServer.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -12,6 +12,11 @@ var connectionString = builder.Configuration.GetConnectionString("Default")
 builder.Services.AddDbContext<AppDbContext>(opt => opt.UseNpgsql(connectionString));
 
 builder.Services.AddSingleton<JwtService>();
+builder.Services.AddHttpClient<ReconnectRecognition>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(8);
+    client.MaxResponseContentBufferSize = 32 * 1024;
+}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 // 时间显示用的时区转换。只影响"输出"，所有判断仍在 UTC 下做 —— 见 DisplayClock 里的注释。
 builder.Services.AddSingleton<DisplayClock>();
 builder.Services.AddRazorPages();
@@ -113,6 +118,8 @@ app.MapPost("/api/heartbeat", async (ActivateRequest req, AppDbContext db, JwtSe
         TimeSpan.FromDays(5), license.ExpiryUtc);
     return Results.Ok(new TokenResponse(token, expiresUtc));
 });
+
+app.MapPost("/api/reconnect/recognize", ReconnectRecognition.RecognizeAsync);
 
 app.Run();
 

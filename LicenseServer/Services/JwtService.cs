@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -41,6 +41,28 @@ public class JwtService
     }
 
     public string GetPublicKeyPem() => _rsa.ExportRSAPublicKeyPem();
+
+    internal ClaimsPrincipal? ValidateClientToken(string token)
+    {
+        try
+        {
+            return new JwtSecurityTokenHandler { MapInboundClaims = false }.ValidateToken(token,
+                new TokenValidationParameters
+                {
+                    IssuerSigningKey = new RsaSecurityKey(_rsa),
+                    ValidateIssuerSigningKey = true,
+                    ValidIssuer = Issuer,
+                    ValidateAudience = false, // 现有激活令牌无 aud
+                    ValidateLifetime = true,
+                    ClockSkew = TimeSpan.Zero,
+                    ValidAlgorithms = [SecurityAlgorithms.RsaSha256]
+                }, out _);
+        }
+        catch (Exception ex) when (ex is SecurityTokenException or ArgumentException)
+        {
+            return null;
+        }
+    }
 
     // 签发令牌：把机器号、许可证号、模型密钥等塞进 claims 里签名。
     // validFor 建议设短一点（比如3~7天），逼客户端定期回来心跳续期，
