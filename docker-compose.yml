@@ -1,4 +1,4 @@
-services:
+﻿services:
   db:
     image: postgres:16
     restart: unless-stopped
@@ -20,6 +20,10 @@ services:
       KEYS_DIR: /app/keys
       # 板端感知服务的共享 token；配置后会签进授权令牌的 perceptionToken claim。
       PERCEPTION_TOKEN: ${PERCEPTION_TOKEN:-}
+      ReconnectVlm__Endpoint: ${ReconnectVlm__Endpoint:-}
+      ReconnectVlm__Model: ${ReconnectVlm__Model:-}
+      ReconnectVlm__Product: ${ReconnectVlm__Product:-}
+      ReconnectVlm__ApiKey: ${ReconnectVlm__ApiKey:-}
     volumes:
       - jwt_keys:/app/keys   # 一定要持久化！容器重启丢了密钥，所有已发出的客户端令牌全部失效
     networks: [internal]
